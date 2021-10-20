@@ -1,7 +1,6 @@
 package mr
 
 import (
-	"container/list"
 	"errors"
 	"log"
 	"sync"
@@ -24,10 +23,10 @@ type Job struct {
 	offset int64
 }
 
-var workers map[string]WorkerInfo
-var jobs map[string]map[string]Job
-var mutex map[string]sync.RWMutex
-var waitJobs list.List
+var workers = make(map[string]WorkerInfo)
+var jobs = make(map[string]map[string]Job)
+var mutex = make(map[string]sync.RWMutex)
+var waitJobs = make([]Runnable, 10)
 
 // Your code here -- RPC handlers for the worker to call.
 
@@ -36,42 +35,46 @@ var waitJobs list.List
 //
 // the RPC argument and reply types are defined in rpc.go.
 //
-func (c *Coordinator) Register(args *RegisterRequest, reply *RegisterResponse) error {
+func (c *Coordinator) Register(args RegisterRequest, reply *RegisterResponse) error {
 	// 重复注册
-	if _, ok := workers[args.workerId]; ok {
+	if _, ok := workers[args.WorkerId]; ok {
 		reply = &RegisterResponse{
-			success: false,
-			code:    int16(400),
-			message: string("Coordinators already have workers"),
+			Success: false,
+			Code:    int16(400),
+			Message: string("Coordinators already have workers"),
 		}
 		return errors.New("Coordinators already have workers")
 	}
 
-	if len(args.workerId) != 0 {
-		workers[args.workerId] = WorkerInfo{
-			host:     args.host,
-			port:     args.port,
-			workerId: args.workerId,
+	if len(args.WorkerId) != 0 {
+		workers[args.WorkerId] = WorkerInfo{
+			host:     args.Host,
+			port:     args.Port,
+			workerId: args.WorkerId,
 		}
 		// 初始化针对worker的锁
-		mutex[args.workerId] = sync.RWMutex{}
-
-		reply = &RegisterResponse{
-			success: false,
-			code:    int16(200),
-			message: string("Coordinators already have workers"),
-		}
+		mutex[args.WorkerId] = sync.RWMutex{}
+		//response
+		reply.Message = "Coordinators already have workers"
+		reply.Success = true
+		reply.Code = int16(200)
 	}
 
 	return nil
 }
-func (c *Coordinator) Heartbeat(args *HeartbeatRequest, reply *HeartbeatRequest) error {
-	if _, ok := workers[args.workerId]; ok {
-		rwMutex := mutex[args.workerId]
-		defer rwMutex.Unlock()
-		rwMutex.Lock()
-		jobs[args.workerId][args.jobId] = Job{}
+func (c *Coordinator) Heartbeat(args HeartbeatRequest, reply *HeartbeatResponse) error {
+	if _, ok := workers[args.WorkerId]; ok {
+		rwMutex := mutex[args.WorkerId]
 
+		rwMutex.Lock()
+		if _, ok := jobs[args.WorkerId]; !ok {
+			jobs[args.WorkerId] = make(map[string]Job)
+		}
+		jobs[args.WorkerId][args.JobId] = Job{offset: 0}
+		rwMutex.Unlock()
+		reply.Message = "Success"
+		reply.Success = true
+		reply.Code = int16(200)
 	}
 	return nil
 }
@@ -119,7 +122,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 			stat, err := file.Stat()
 			if err != nil {
 				size := stat.Size()
-				waitJobs.PushBack(Runnable{
+				_ = append(waitJobs, Runnable{
 					fileName:    stat.Name(),
 					startOffset: 0,
 					endOffset:   size,

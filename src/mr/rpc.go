@@ -12,27 +12,27 @@ package mr
 //
 
 type HeartbeatRequest struct {
-	workerId string
-	jobId    string
-	host     string
-	port     int16
+	WorkerId string
+	JobId    string
+	Host     string
+	Port     int16
 }
 type HeartbeatResponse struct {
-	success bool
-	message string
-	code    int8
+	Success bool
+	Message string
+	Code    int16
 }
 
 type RegisterRequest struct {
-	workerId string
-	host     string
-	port     int16
+	WorkerId string
+	Host     string
+	Port     int16
 }
 
 type RegisterResponse struct {
-	success bool
-	code    int16
-	message string
+	Success bool
+	Code    int16
+	Message string
 }
 
 // Add your RPC definitions here.
